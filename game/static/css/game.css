@@ -9,8 +9,8 @@
 .ac-game-menu-field {
     width: 20vw;
     position: relative;
-    top: 40vh;
-    left: 19vh;
+    top: 40%;
+    left: 20%;
 }
 
 .ac-game-menu-field-item {
@@ -30,4 +30,10 @@
 .ac-game-menu-field-item:hover {
     transform: scale(1.2);
     transition: 100ms;
+}
+
+.ac-game-playground {
+    width: 100%;
+    height: 100%;
+    user-select: none;
 }
