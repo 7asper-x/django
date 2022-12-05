@@ -34,7 +34,7 @@ class AcGamePlayground {
             this.width / 2,
             this.height / 2,
             this.height * 0.05,
-            "white",
+            "red",
             this.height * 0.15,
             true
         ));

@@ -12,6 +12,7 @@ class AcGameMenu {
                 </div>
             </div>
         `);
+        this.$menu.hide();
         this.root.$ac_game.append(this.$menu);
         this.$single_mode = this.$menu.find('.ac-game-menu-field-item-single');
         this.$multi_mode = this.$menu.find('.ac-game-menu-field-item-multi');
@@ -32,11 +33,11 @@ class AcGameMenu {
         });
 
         this.$multi_mode.click(function() {
-            console.log("clicked multi");
+            console.log("clicked multi fucker");
         });
 
         this.$settings.click(function() {
-            console.log("clicked settings");
+            console.log("clicked settings fucker");
         });
     }
 
