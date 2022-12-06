@@ -8,7 +8,7 @@ class AcGameMenu {
                     <br>
                     <div class="ac-game-menu-field-item ac-game-menu-field-item-multi">Multi Player</div>
                     <br>
-                    <div class="ac-game-menu-field-item ac-game-menu-field-item-settings">Settings</div>
+                    <div class="ac-game-menu-field-item ac-game-menu-field-item-settings">Logout</div>
                 </div>
             </div>
         `);
@@ -33,11 +33,10 @@ class AcGameMenu {
         });
 
         this.$multi_mode.click(function() {
-            console.log("clicked multi fucker");
         });
 
         this.$settings.click(function() {
-            console.log("clicked settings fucker");
+            outer.root.settings.logout_on_remote();
         });
     }
 
