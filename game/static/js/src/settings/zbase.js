@@ -207,6 +207,14 @@ class Settings {
         this.$login.show();
     }
 
+    get_info_acapp() {
+        let outer = this;
+
+        $.ajax({
+
+        })
+    }
+
     get_info() {
         let outer = this;
         $.ajax({
