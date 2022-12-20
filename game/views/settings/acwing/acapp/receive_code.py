@@ -1,4 +1,5 @@
 from django.shortcuts import redirect
+from django.http import JsonResponse
 from django.core.cache import cache
 from django.contrib.auth.models import User
 from game.models.player.player import Player
@@ -9,11 +10,21 @@ import requests
 
 def receive_code(request):
     data = request.GET
+
+    if "errcode" in data:
+        return JsonResponse({
+            'result': "apply failed",
+            'errcode': data['errcode'],
+            'errmsg': data['errmsg'],
+        })
+
     code = data.get('code')
     state = data.get('state')
 
     if not cache.has_key(state):
-        return redirect("index")
+        return JsonResponse({
+            'result': "state not exist",
+        })
     cache.delete(state)
 
     apply_access_token_url = "https://www.acwing.com/third_party/api/oauth2/access_token/"
@@ -30,8 +41,12 @@ def receive_code(request):
 
     players = Player.objects.filter(openid=openid)
     if players.exists():
-        login(request, players[0].user)
-        return redirect("index")
+        player = players[0]
+        return JsonResponse({
+            'result': "success",
+            'username': player.user.username,
+            'photo': player.photo,
+        })
 
     get_userinfo_url = "https://www.acwing.com/third_party/api/meta/identity/getinfo/"
     params = {
@@ -46,8 +61,11 @@ def receive_code(request):
         username += str(randint(0, 9))
 
     user = User.objects.create(username=username)
-    Player.objects.create(user=user, photo=photo, openid=openid)
+    player = Player.objects.create(user=user, photo=photo, openid=openid)
 
-    login(request, user)
+    return JsonResponse({
+        'result': "success",
+        'username': player.user.username,
+        'photo': player.photo,
+    })
 
-    return redirect("index")
