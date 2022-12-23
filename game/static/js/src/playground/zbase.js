@@ -16,7 +16,7 @@ class AcGamePlayground {
 
     start() {
         let outer = this;
-        $(window).resize(function() {
+        $(window).resize(function () {
             outer.resize();
         });
     }
@@ -36,7 +36,7 @@ class AcGamePlayground {
         if (this.game_map) this.game_map.resize();
     }
 
-    show() {
+    show(mode) {
         this.$playground.show();
         this.root.$ac_game.append(this.$playground);
         this.width = this.$playground.width();
@@ -51,20 +51,36 @@ class AcGamePlayground {
             0.05,
             "red",
             0.15,
-            true
+            "me",
+            this.root.settings.username,
+            this.root.settings.photo,
         ));
-
-        for (let i = 0; i < 14; i ++) {
-            this.players.push(new Player(
-                this,
-                this.width / 2 / this.scale,
-                0.5,
-                0.05,
-                this.get_random_color(),
-                0.15,
-                false,
-            ));
+        if (mode === "single mode") {
+            for (let i = 0; i < 14; i++) {
+                this.players.push(new Player(
+                    this,
+                    this.width / 2 / this.scale,
+                    0.5,
+                    0.05,
+                    this.get_random_color(),
+                    0.15,
+                    "robot",
+                ));
+            }
+        } else if (mode === "multi mode") {
+            for (let i = 0; i < 14; i++) {
+                this.players.push(new Player(
+                    this,
+                    this.width / 2 / this.scale,
+                    0.5,
+                    0.05,
+                    this.get_random_color(),
+                    0.15,
+                    "robot",
+                ));
+            }
         }
+
     }
 
     hide() {
