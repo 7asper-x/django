@@ -38,7 +38,7 @@ class Player extends AcGameObject {
     start() {
         if (this.character === "me") {
             this.add_listening_events();
-        } else {
+        } else if (this.character === "robot") {
             this.wonder();
         }
     }
