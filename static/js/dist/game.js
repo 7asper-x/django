@@ -141,6 +141,32 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         this.ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
         this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     }
+}class NoticeBoard extends AcGameObject {
+    constructor(playground) {
+        super();
+        this.playground = playground;
+        this.ctx = this.playground.game_map.ctx;
+        this.text = "ready: 0 players";
+    }
+
+    start() {
+
+    }
+
+    write(text) {
+        this.text = text;
+    }
+
+    update() {
+        this.render();
+    }
+
+    render() {
+        this.ctx.font = "20px serif";
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(this.text, this.playground.width / 2, 20);
+    }
 }class Particle extends AcGameObject {
     constructor(playground, x, y, radius, vx, vy, color, speed, range) {
         super();
@@ -204,12 +230,23 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         this.spend_time = 0;
         this.username = username;
         this.photo = photo;
+        this.fireballs = [];
 
         this.cur_skill = null;
 
         if (this.character !== "robot") {
             this.img = new Image();
             this.img.src = this.photo;
+
+            if (this.character === "me") {
+                this.fireball_coldtime = 3; // 3 seconds cooldown time
+                this.fireball_img = new Image();
+                this.fireball_img.src = "https://cdn.acwing.com/media/article/image/2021/12/02/1_9340c86053-fireball.png";
+
+                this.blink_coldtime = 5;
+                this.blink_img = new Image();
+                this.blink_img.src = "https://cdn.acwing.com/media/article/image/2021/12/02/1_daccabdc53-blink.png";
+            }
         }
     }
 
@@ -220,6 +257,14 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
     }
 
     start() {
+        this.playground.players_cnt++;
+        this.playground.notice_board.write("ready: " + this.playground.players_cnt + " players");
+
+        if (this.playground.players_cnt >= 3) {
+            this.playground.state = "fighting";
+            this.playground.notice_board.write("Fighting");
+        }
+
         if (this.character === "me") {
             this.add_listening_events();
         } else if (this.character === "robot") {
@@ -234,12 +279,37 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         });
         let scale = this.playground.scale;
         this.playground.game_map.$canvas.mousedown(function (e) {
+            if (outer.playground.state !== "fighting") return false;
+
             const rect = outer.ctx.canvas.getBoundingClientRect();
             if (e.which === 3) {
-                outer.move_to((e.clientX - rect.left) / scale, (e.clientY - rect.top) / scale);
+                let tx = (e.clientX - rect.left) / scale;
+                let ty = (e.clientY - rect.top) / scale;
+                outer.move_to(tx, ty);
+
+                if (outer.playground.mode === "multi mode") {
+                    outer.playground.mps.send_move_to(tx, ty);
+                }
             } else if (e.which === 1) {
+
+                let tx = (e.clientX - rect.left) / scale;
+                let ty = (e.clientY - rect.top) / scale;
                 if (outer.cur_skill === "fireball") {
-                    outer.shoot_fireball((e.clientX - rect.left) / scale, (e.clientY - rect.top) / scale);
+                    if (outer.fireball_coldtime > outer.eps) return false;
+
+                    let fireball = outer.shoot_fireball(tx, ty);
+
+                    if (outer.playground.mode === "multi mode") {
+                        outer.playground.mps.send_shoot_fireball(tx, ty, fireball.uuid);
+                    }
+                } else if (outer.cur_skill === "blink") {
+                    if (outer.blink_coldtime > outer.eps) return false;
+
+                    outer.blink(tx, ty);
+
+                    if (outer.playground.mode === "multi mode") {
+                        outer.playground.mps.send_blink(tx, ty);
+                    }
                 }
 
                 outer.cur_skill = null;
@@ -247,8 +317,15 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         });
 
         $(window).keydown(function (e) {
+            if (outer.playground.state !== "fighting") return true;
+
             if (e.which === 81) { // q
+                if (outer.fireball_coldtime > outer.eps) return true;
                 outer.cur_skill = "fireball";
+                return false;
+            } else if (e.which === 70) {
+                if (outer.blink_coldtime > outer.eps) return true;
+                outer.cur_skill = "blink";
                 return false;
             }
         })
@@ -262,7 +339,32 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         let color = this.character === "me" ? "orange" : "red";
         let speed = 0.3;
         let move_length = 1;
-        new FireBall(this.playground, this, x, y, radius, vx, vy, color, speed, move_length, 0.01);
+        let fireball = new FireBall(this.playground, this, x, y, radius, vx, vy, color, speed, move_length, 0.01);
+        this.fireballs.push(fireball);
+
+        this.fireball_coldtime = 3;
+
+        return fireball;
+    }
+
+    blink(tx, ty) {
+        let d = this.get_dist(this.x, this.y, tx, ty);
+        d = Math.min(0.8, d);
+        let angle = Math.atan2(ty - this.y, tx - this.x);
+        this.x += d * Math.cos(angle);
+        this.y += d * Math.sin(angle);
+        this.blink_coldtime = 5;
+        this.move_length = 0;  // stop after blink
+    }
+
+    destroy_fireball(uuid) {
+        for (let i = 0; i < this.fireballs.length; i++) {
+            let fireball = this.fireballs[i];
+            if (fireball.uuid === uuid) {
+                fireball.destroy();
+                break;
+            }
+        }
     }
 
     get_dist(x1, y1, x2, y2) {
@@ -279,10 +381,14 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
     }
 
     on_destroy() {
-        if (this.character !== "robot") this.playground.game_map.$canvas.off();
+        if (this.character === "me") {
+            this.playground.state = "over";
+        }
+
         for (let i = 0; i < this.playground.players.length; i++) {
             if (this.playground.players[i] === this) {
                 this.playground.players.splice(i, 1);
+                break;
             }
         }
     }
@@ -312,13 +418,34 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         this.speed *= 1.2;
     }
 
+    player_receive_attack(x, y, angle, damage, ball_uuid, attacker) {
+        attacker.destroy_fireball(ball_uuid);
+        this.x = x;
+        this.y = y;
+        this.is_attacked(angle, damage);
+    }
+
     update() {
+        this.spend_time += this.timedelta / 1000;
+
+        if (this.character === "me" && this.playground.state === "fighting") {
+            this.update_coldtime();
+        }
+
         this.update_move();
+
         this.render();
     }
 
+    update_coldtime() {
+        this.fireball_coldtime -= this.timedelta / 1000;
+        this.fireball_coldtime = Math.max(this.fireball_coldtime, 0);
+
+        this.blink_coldtime -= this.timedelta / 1000;
+        this.blink_coldtime = Math.max(this.blink_coldtime, 0);
+    }
+
     update_move() {
-        this.spend_time += this.timedelta / 1000;
         if (this.spend_time > 5 && this.character === "robot" && Math.random() < 1 / 300.0) {
             let player = this.playground.players[0];
             let tx = player.x + player.speed * this.vx * this.timedelta / 1000 * 0.3;
@@ -364,6 +491,49 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
             this.ctx.fill();
         }
 
+        if (this.character === "me") {
+            this.render_skill_coldtime();
+        }
+    }
+
+    render_skill_coldtime() {
+        let scale = this.playground.scale;
+        let x = 1.5, y = 0.9, r = 0.04;
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(x * scale, y * scale, r * scale, 0, Math.PI * 2, false);
+        this.ctx.stroke();
+        this.ctx.clip();
+        this.ctx.drawImage(this.fireball_img, (x - r) * scale, (y - r) * scale, r * 2 * scale, r * 2 * scale);
+        this.ctx.restore();
+
+        let x1 = 1.6, y1 = 0.9, r1 = 0.04;
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(x1 * scale, y1 * scale, r1 * scale, 0, Math.PI * 2, false);
+        this.ctx.stroke();
+        this.ctx.clip();
+        this.ctx.drawImage(this.blink_img, (x1 - r1) * scale, (y1 - r1) * scale, r1 * 2 * scale, r1 * 2 * scale);
+        this.ctx.restore();
+
+        if (this.fireball_coldtime > 0) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x * scale, y * scale);
+            this.ctx.arc(x * scale, y * scale, r * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.fireball_coldtime / 3) - Math.PI / 2, true);
+            this.ctx.lineTo(x * scale, y * scale);
+            this.ctx.fillStyle = "rgba(0, 0, 255, 0.6)";
+            this.ctx.fill();
+        }
+
+        if (this.blink_coldtime > 0) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x1 * scale, y1 * scale);
+            this.ctx.arc(x1 * scale, y1 * scale, r1 * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.blink_coldtime / 5) - Math.PI / 2, true);
+            this.ctx.lineTo(x1 * scale, y1 * scale);
+            this.ctx.fillStyle = "rgba(0, 0, 255, 0.6)";
+            this.ctx.fill();
+        }
+
     }
 }class FireBall extends AcGameObject {
     constructor(playground, player, x, y, radius, vx, vy, color, speed, range, damage) {
@@ -405,24 +575,40 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
             return false;
         }
 
-        let moved = Math.min(this.range, this.speed * this.timedelta / 1000);
-        this.range -= moved;
-        this.x += this.vx * moved;
-        this.y += this.vy * moved;
+        this.update_move();
 
-        for (let i = 0; i < this.playground.players.length; i ++) {
-            let player = this.playground.players[i];
-            if (this.player !== player && this.is_collision(player)) {
-                this.attack(player);
-            }
+        if (this.player.character !== "enemy") {
+            this.update_attack();
         }
 
         this.render();
     }
 
+    update_move() {
+        let moved = Math.min(this.range, this.speed * this.timedelta / 1000);
+        this.range -= moved;
+        this.x += this.vx * moved;
+        this.y += this.vy * moved;
+    }
+
+    update_attack() {
+        for (let i = 0; i < this.playground.players.length; i++) {
+            let player = this.playground.players[i];
+            if (this.player !== player && this.is_collision(player)) {
+                this.attack(player);
+                break;
+            }
+        }
+    }
+
     attack(player) {
         let angle = Math.atan2(player.y - this.y, player.x - this.x);
         player.is_attacked(angle, this.damage);
+
+        if (this.playground.mode === "multi mode") {
+            this.playground.mps.send_attack(player.uuid, player.x, player.y, angle, this.damage, this.uuid);
+        }
+
         this.destroy();
     }
 
@@ -432,6 +618,16 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         this.ctx.arc(this.x * scale, this.y * scale, this.radius * scale, 0, Math.PI * 2, false);
         this.ctx.fillStyle = this.color;
         this.ctx.fill();
+    }
+
+    on_destroy() {
+        let fireballs = this.player.fireballs;
+        for (let i = 0; i < fireballs.length; i++) {
+            if (fireballs[i] === this) {
+                fireballs.splice(i, 1);
+                break;
+            }
+        }
     }
 }class MultiPlayerSocket {
     constructor(playground) {
@@ -457,9 +653,26 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
             let event = data.event;
             if (event === "create_player") {
                 outer.receive_create_player(uuid, data.username, data.photo);
+            } else if (event === "move_to") {
+                outer.receive_move_to(uuid, data.tx, data.ty);
+            } else if (event === "shoot_fireball") {
+                outer.receive_shoot_fireball(uuid, data.tx, data.ty, data.ball_uuid);
+            } else if (event === "attack") {
+                outer.receive_attack(uuid, data.target_uuid, data.x, data.y, data.angle, data.damage, data.ball_uuid);
+            } else if (event === "blink") {
+                outer.receive_blink(uuid, data.tx, data.ty);
             }
-            console.log(data);
         }
+    }
+
+    get_player(uuid) {
+        let players = this.playground.players;
+        for (let i = 0; i < players.length; i ++) {
+            let player = players[i];
+            if (player.uuid === uuid) return player;
+        }
+
+        return null;
     }
 
     send_create_player(username, photo) {
@@ -469,7 +682,7 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
             'uuid': outer.uuid,
             'username': username,
             'photo': photo,
-        }))
+        }));
     }
 
     receive_create_player(uuid, username, photo) {
@@ -487,6 +700,82 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
 
         player.uuid = uuid;
         this.playground.players.push(player);
+    }
+
+    send_move_to(tx, ty) {
+        let outer = this;
+        this.ws.send(JSON.stringify({
+            'event': "move_to",
+            'uuid': outer.uuid,
+            'tx': tx,
+            'ty': ty,
+        }));
+    }
+
+    receive_move_to(uuid, tx, ty) {
+        let player = this.get_player(uuid);
+        if (player) {
+            player.move_to(tx, ty);
+        }
+    }
+
+    send_shoot_fireball(tx, ty, ball_uuid) {
+        let outer = this;
+        this.ws.send(JSON.stringify({
+            'event': "shoot_fireball",
+            'uuid': outer.uuid,
+            'tx': tx,
+            'ty': ty,
+            'ball_uuid': ball_uuid,
+        }));
+    }
+
+    receive_shoot_fireball(uuid, tx, ty, ball_uuid) {
+        let player = this.get_player(uuid);
+        if (player) {
+            let fireball = player.shoot_fireball(tx, ty);
+            fireball.uuid = ball_uuid;
+        }
+    }
+
+    send_attack(target_uuid, x, y, angle, damage, ball_uuid) {
+        let outer = this;
+        this.ws.send(JSON.stringify({
+            'event': "attack",
+            'uuid': outer.uuid,
+            'target_uuid': target_uuid,
+            'x': x,
+            'y': y,
+            'angle': angle,
+            'damage': damage,
+            'ball_uuid': ball_uuid,
+        }));
+    }
+
+    receive_attack(uuid, target_uuid, x, y, angle, damage, ball_uuid) {
+        let attacker = this.get_player(uuid);
+        let target = this.get_player(target_uuid);
+
+        if (attacker && target) {
+            target.player_receive_attack(x, y, angle, damage, ball_uuid, attacker);
+        }
+    }
+
+    send_blink(tx, ty) {
+        let outer = this;
+        this.ws.send(JSON.stringify({
+            'event': "blink",
+            'uuid': outer.uuid,
+            'tx': tx,
+            'ty': ty,
+        }));
+    }
+
+    receive_blink(uuid, tx, ty) {
+        let player = this.get_player(uuid);
+        if (player) {
+            player.blink(tx, ty);
+        }
     }
 }class AcGamePlayground {
     constructor(root) {
@@ -533,6 +822,12 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         this.width = this.$playground.width();
         this.height = this.$playground.height();
         this.game_map = new GameMap(this);
+
+        this.mode = mode;
+        this.state = "waiting";  // waiting -> fighting -> over
+        this.notice_board = new NoticeBoard(this);
+        this.players_cnt = 0;
+
         this.players = [];
         this.resize();
         this.players.push(new Player(
@@ -702,7 +997,7 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         let outer = this;
         this.add_listening_events_login();
         this.add_listening_events_register();
-        
+
         this.$acwing_login.click(function () {
             outer.acwing_login();
         })
@@ -713,7 +1008,6 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
             url: "https://app4109.acapp.acwing.com.cn/settings/acwing/web/apply_code/",
             type: "GET",
             success: function (resp) {
-                console.log(resp);
                 if (resp.result === "success") {
                     window.location.replace(resp.apply_code_url);
                 }
@@ -735,7 +1029,6 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
                 password: password,
             },
             success: function (resp) {
-                console.log(resp);
                 if (resp.result === "success") {
                     location.reload();
                 } else {
@@ -761,7 +1054,6 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
                 password_confirm: password_confirm
             },
             success: function (resp) {
-                console.log(resp);
                 if (resp.result === "success") {
                     location.reload();
                 } else {
@@ -772,17 +1064,20 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
     }
 
     logout_on_remote() {
-        if (this.platform === "ACAPP") return false;
-        $.ajax({
-            url: "https://app4109.acapp.acwing.com.cn/settings/logout/",
-            type: "GET",
-            success: function (resp) {
-                console.log(resp);
-                if (resp.result === "success") {
-                    location.reload();
+        if (this.platform === "ACAPP") {
+            this.root.AcWingOS.api.window.close();
+        } else {
+            $.ajax({
+                url: "https://app4109.acapp.acwing.com.cn/settings/logout/",
+                type: "GET",
+                success: function (resp) {
+                    if (resp.result === "success") {
+                        location.reload();
+                    }
                 }
-            }
-        })
+            });
+        }
+
     }
 
     register() {  // register page
@@ -799,7 +1094,6 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
         let outer = this;
 
         this.root.AcWingOS.api.oauth2.authorize(appid, redirect_uri, scope, state, function (resp) {
-            console.log(resp);
             if (resp.result === "success") {
                 outer.username = resp.username;
                 outer.photo = resp.photo;
@@ -835,7 +1129,6 @@ requestAnimationFrame(AC_GAME_ANIMATION);class GameMap extends AcGameObject {
                 platform: outer.platform,
             },
             success: function (resp) {
-                console.log(resp);
                 if (resp.result === "success") {
                     outer.username = resp.username;
                     outer.photo = resp.photo;
