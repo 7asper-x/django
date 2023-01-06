@@ -21,6 +21,8 @@ class Player extends AcGameObject {
         this.username = username;
         this.photo = photo;
         this.fireballs = [];
+        this.const_fireball_coldtime = 0.1;
+        this.const_blink_coldtime = 1;
 
         this.cur_skill = null;
 
@@ -29,11 +31,11 @@ class Player extends AcGameObject {
             this.img.src = this.photo;
 
             if (this.character === "me") {
-                this.fireball_coldtime = 3; // 3 seconds cooldown time
+                this.fireball_coldtime = this.const_fireball_coldtime; // 3 seconds cooldown time
                 this.fireball_img = new Image();
                 this.fireball_img.src = "https://cdn.acwing.com/media/article/image/2021/12/02/1_9340c86053-fireball.png";
 
-                this.blink_coldtime = 5;
+                this.blink_coldtime = this.const_blink_coldtime;
                 this.blink_img = new Image();
                 this.blink_img.src = "https://cdn.acwing.com/media/article/image/2021/12/02/1_daccabdc53-blink.png";
             }
@@ -143,7 +145,7 @@ class Player extends AcGameObject {
         let fireball = new FireBall(this.playground, this, x, y, radius, vx, vy, color, speed, move_length, 0.01);
         this.fireballs.push(fireball);
 
-        this.fireball_coldtime = 3;
+        this.fireball_coldtime = this.const_fireball_coldtime;
 
         return fireball;
     }
@@ -154,7 +156,7 @@ class Player extends AcGameObject {
         let angle = Math.atan2(ty - this.y, tx - this.x);
         this.x += d * Math.cos(angle);
         this.y += d * Math.sin(angle);
-        this.blink_coldtime = 5;
+        this.blink_coldtime = this.const_blink_coldtime;
         this.move_length = 0;  // stop after blink
     }
 
@@ -183,7 +185,10 @@ class Player extends AcGameObject {
 
     on_destroy() {
         if (this.character === "me") {
-            this.playground.state = "over";
+            if (this.playground.state === "fighting") {
+                this.playground.state = "over";
+                this.playground.score_board.lose();
+            }
         }
 
         for (let i = 0; i < this.playground.players.length; i++) {
@@ -229,6 +234,8 @@ class Player extends AcGameObject {
     update() {
         this.spend_time += this.timedelta / 1000;
 
+        this.update_win();
+
         if (this.character === "me" && this.playground.state === "fighting") {
             this.update_coldtime();
         }
@@ -236,6 +243,13 @@ class Player extends AcGameObject {
         this.update_move();
 
         this.render();
+    }
+
+    update_win() {
+        if (this.playground.state === "fighting" && this.character === "me" && this.playground.players.length === 1) {
+            this.playground.state = "over";
+            this.playground.score_board.win();
+        }
     }
 
     update_coldtime() {
@@ -320,7 +334,7 @@ class Player extends AcGameObject {
         if (this.fireball_coldtime > 0) {
             this.ctx.beginPath();
             this.ctx.moveTo(x * scale, y * scale);
-            this.ctx.arc(x * scale, y * scale, r * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.fireball_coldtime / 3) - Math.PI / 2, true);
+            this.ctx.arc(x * scale, y * scale, r * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.fireball_coldtime / this.const_fireball_coldtime) - Math.PI / 2, true);
             this.ctx.lineTo(x * scale, y * scale);
             this.ctx.fillStyle = "rgba(0, 0, 255, 0.6)";
             this.ctx.fill();
@@ -329,7 +343,7 @@ class Player extends AcGameObject {
         if (this.blink_coldtime > 0) {
             this.ctx.beginPath();
             this.ctx.moveTo(x1 * scale, y1 * scale);
-            this.ctx.arc(x1 * scale, y1 * scale, r1 * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.blink_coldtime / 5) - Math.PI / 2, true);
+            this.ctx.arc(x1 * scale, y1 * scale, r1 * scale, 0 - Math.PI / 2, Math.PI * 2 * (1 - this.blink_coldtime / this.const_blink_coldtime) - Math.PI / 2, true);
             this.ctx.lineTo(x1 * scale, y1 * scale);
             this.ctx.fillStyle = "rgba(0, 0, 255, 0.6)";
             this.ctx.fill();
