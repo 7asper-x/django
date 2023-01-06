@@ -9,6 +9,15 @@ class AcGamePlayground {
         this.start();
     }
 
+    create_uuid() {
+        let res = "";
+        for (let i = 0; i < 8; i ++) {
+            let x = parseInt(Math.floor(Math.random() * 10));  // return value from [0, 1)
+            res += x;
+        }
+        return res;
+    }
+
     get_random_color() {
         let colors = ["#E27D60", "#85DCBE", "#E8A87C", "#C38D9E", "#41B3A3"];
         return colors[Math.floor(Math.random() * colors.length)];
@@ -16,9 +25,16 @@ class AcGamePlayground {
 
     start() {
         let outer = this;
-        $(window).resize(function () {
+        let uuid = this.create_uuid();
+        $(window).on(`resize.${uuid}`, function () {
             outer.resize();
         });
+
+        if (this.root.AcWingOS) {
+            this.root.AcWingOS.api.window.on_close(function() {
+                $(window).off(`resize.${uuid}`);
+            });
+        }
     }
 
     update() {
