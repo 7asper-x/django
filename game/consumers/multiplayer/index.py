@@ -14,11 +14,16 @@ from channels.db import database_sync_to_async
 
 class MultiPlayer(AsyncWebsocketConsumer):
     async def connect(self):
-        print('connect')
-        await self.accept()
+        user = self.scope['user']
+        print(user, user.is_authenticated)
+        if user.is_authenticated:
+            print('connect')
+            await self.accept()
+        else:
+            await self.close()
 
     async def disconnect(self, close_code):
-        if self.room_name:
+        if hasattr(self, 'room_name') and self.room_name:
             print('disconnect')
             await self.channel_layer.group_discard(self.room_name, self.channel_name)
 

@@ -1,8 +1,9 @@
-from django.shortcuts import redirect
+from django.shortcuts import redirect, reverse
 from django.core.cache import cache
 from django.contrib.auth.models import User
 from game.models.player.player import Player
-from django.contrib.auth import login
+from rest_framework_simplejwt.tokens import RefreshToken
+# from django.contrib.auth import login
 from random import randint
 import requests
 
@@ -30,8 +31,9 @@ def receive_code(request):
 
     players = Player.objects.filter(openid=openid)
     if players.exists():
-        login(request, players[0].user)
-        return redirect("index")
+        refresh = RefreshToken.for_user(players[0].user)
+        # login(request, players[0].user)
+        return redirect(reverse("index") + "?access=%s&refresh=%s" % (str(refresh.access_token), str(refresh)))
 
     get_userinfo_url = "https://www.acwing.com/third_party/api/meta/identity/getinfo/"
     params = {
@@ -48,6 +50,7 @@ def receive_code(request):
     user = User.objects.create(username=username)
     Player.objects.create(user=user, photo=photo, openid=openid)
 
-    login(request, user)
+    refresh = RefreshToken.for_user(players[0].user)
+    # login(request, user)
 
-    return redirect("index")
+    redirect(reverse("index") + "?access=%s&refresh=%s" % (str(refresh.access_token), str(refresh)))
